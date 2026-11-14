@@ -1,0 +1,156 @@
+---
+title: 'Transition Matrix, Eigenvectors, and Stationarity'
+author: "Majeed Simaan"
+date: "Nov 12, 2026"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# Objective
+
+These notes use a two-state Markov chain to make three connected points: the stationary distribution is the eigenvector of $\mathbf{P}^{\top}$ associated with the eigenvalue $1$; the second eigenvalue is pinned down by the trace and its eigenvector sums to zero; and the powers $\mathbf{P}^n$ converge to the stationary distribution at the geometric rate $|\lambda_2|$.
+
+# Setup
+
+Consider a two-state chain with transition matrix
+$$
+\mathbf{P}=\begin{pmatrix}p_{11} & p_{12}\\ p_{21} & p_{22}\end{pmatrix},
+\qquad p_{ij}=\Pr(s_{t+1}=j\mid s_t=i),
+$$
+so each row sums to one: $p_{12}=1-p_{11}$ and $p_{21}=1-p_{22}$. Throughout, $0<p_{11},p_{22}<1$, so both states are visited and neither is absorbing.
+
+```{r}
+p11 <- 0.95
+p22 <- 0.91
+P <- matrix(c(p11, 1 - p11, 1 - p22, p22), 2, 2, byrow = TRUE)
+P
+```
+
+# Stationary Distribution
+
+A distribution $\boldsymbol{\pi}=(\pi_1,\pi_2)^{\top}$ is stationary if one transition leaves it unchanged:
+$$
+\boldsymbol{\pi}^{\top}\mathbf{P}=\boldsymbol{\pi}^{\top}
+\quad\Longleftrightarrow\quad
+\mathbf{P}^{\top}\boldsymbol{\pi}=\boldsymbol{\pi}.
+$$
+Written out, the unconditional probability of state 1 is the probability of being in state 1 and staying, plus the probability of being in state 2 and switching (and likewise for state 2):
+$$
+\pi_1=\pi_1p_{11}+\pi_2p_{21},\qquad \pi_2=\pi_1p_{12}+\pi_2p_{22}.
+$$
+The two equations are linearly dependent (add them and use the row sums), so the normalization $\pi_1+\pi_2=1$ is needed to close the system. Solving,
+$$
+\pi_{1}=\frac{p_{21}}{p_{12}+p_{21}},\qquad
+\pi_{2}=\frac{p_{12}}{p_{12}+p_{21}}.
+$$
+Each probability is the inflow into that state as a share of total switching: the stickier state 1 is relative to state 2 (small $p_{12}$ relative to $p_{21}$), the more mass it carries.
+
+```{r}
+pi_1 <- P[2, 1] / (P[1, 2] + P[2, 1])
+pi_2 <- P[1, 2] / (P[1, 2] + P[2, 1])
+pi_vec <- c(pi_1, pi_2)
+pi_vec
+```
+
+# Eigenvalues
+
+Two facts pin down the spectrum of $\mathbf{P}$ without computation.
+
+First, $\lambda_1=1$ is always an eigenvalue. Rows sum to one, so $\mathbf{P}\mathbf{1}=\mathbf{1}$ with $\mathbf{1}=(1,1)^{\top}$, and $\mathbf{P}$ and $\mathbf{P}^{\top}$ share the same characteristic polynomial, hence the same eigenvalues. The stationarity condition $\mathbf{P}^{\top}\boldsymbol{\pi}=\boldsymbol{\pi}$ says precisely that $\boldsymbol{\pi}$ is the eigenvector of $\mathbf{P}^{\top}$ for $\lambda_1=1$.
+
+Second, the trace equals the sum of the eigenvalues:
+$$
+\operatorname{Tr}(\mathbf{P})=p_{11}+p_{22}=\lambda_1+\lambda_2
+\quad\Longrightarrow\quad
+\lambda_2=p_{11}+p_{22}-1 .
+$$
+As a check, $\det\mathbf{P}=p_{11}p_{22}-p_{12}p_{21}=p_{11}+p_{22}-1=\lambda_1\lambda_2$. Under $0<p_{11},p_{22}<1$ we have $|\lambda_2|<1$. The two excluded boundary cases show why this matters: $\lambda_2=1$ when $p_{11}=p_{22}=1$ (two absorbing states, no unique $\boldsymbol{\pi}$), and $\lambda_2=-1$ when $p_{11}=p_{22}=0$ (deterministic alternation, so $\mathbf{P}^n$ oscillates and never settles).
+
+*Remark.* $\lambda_2=p_{11}-p_{21}$ is a persistence measure: it is zero when the two rows coincide (states are i.i.d.), and a short calculation shows it equals the first-order autocorrelation of the state indicator $\mathbb{I}\{s_t=1\}$ under $\boldsymbol{\pi}$.
+
+```{r}
+e <- eigen(t(P))
+lambs <- e$values
+v_vec <- e$vectors
+data.frame(lambda = lambs, closed_form = c(1, p11 + p22 - 1))
+```
+
+# Eigenvectors
+
+**First eigenvector.** `eigen()` scales each eigenvector to unit Euclidean norm (with arbitrary sign), so the reported $\mathbf{v}_1$ is proportional, not equal, to $\boldsymbol{\pi}$. Rescaling it to sum to one recovers the stationary distribution exactly.
+
+```{r}
+cbind(raw = v_vec[, 1], rescaled = v_vec[, 1] / sum(v_vec[, 1]), pi = pi_vec)
+```
+
+**Second eigenvector.** Solve $\mathbf{P}^{\top}\mathbf{v}_2=\lambda_2\mathbf{v}_2$ with $\lambda_2=p_{11}+p_{22}-1$:
+$$
+p_{11}v_{2}(1)+p_{21}v_{2}(2)=(p_{11}+p_{22}-1)\,v_{2}(1),\qquad
+p_{12}v_{2}(1)+p_{22}v_{2}(2)=(p_{11}+p_{22}-1)\,v_{2}(2).
+$$
+In the first equation $p_{22}-1=-p_{21}$, so it collapses to $p_{21}v_2(2)=-p_{21}v_2(1)$, i.e.
+$$
+v_{2}(2)=-v_{2}(1)\quad\Longrightarrow\quad \mathbf{v}_2\propto(1,-1)^{\top}.
+$$
+The second equation is redundant, as it must be: an eigenvector is determined only up to scale, so there is no unique solution, and `eigen()` returns $\pm(1,-1)^{\top}/\sqrt{2}$.
+
+That $\mathbf{v}_2$ sums to zero is not a coincidence of the two-state case. Let $\mathbf{r}$ be a right eigenvector of $\mathbf{P}$ ($\mathbf{P}\mathbf{r}=\lambda_r\mathbf{r}$) and $\mathbf{l}$ a left eigenvector ($\mathbf{P}^{\top}\mathbf{l}=\lambda_l\mathbf{l}$). Then
+$$
+\lambda_r\,\mathbf{l}^{\top}\mathbf{r}
+=\mathbf{l}^{\top}\mathbf{P}\mathbf{r}
+=(\mathbf{P}^{\top}\mathbf{l})^{\top}\mathbf{r}
+=\lambda_l\,\mathbf{l}^{\top}\mathbf{r},
+$$
+so $\mathbf{l}^{\top}\mathbf{r}=0$ whenever $\lambda_l\neq\lambda_r$. Taking $\mathbf{r}=\mathbf{1}$ (eigenvalue $1$) and $\mathbf{l}=\mathbf{v}_2$ (eigenvalue $\lambda_2\neq1$) gives $\mathbf{1}^{\top}\mathbf{v}_2=0$. Every left eigenvector other than $\boldsymbol{\pi}$ sums to zero. This is why only the first can be normalized into a probability vector, and why, in the convergence argument below, the transient term redistributes probability across states without creating any.
+
+```{r}
+v_vec[, 2] / v_vec[1, 2]   # rescale so the first entry is 1
+sum(v_vec[, 2])            # sums to zero
+```
+
+# Convergence of $\mathbf{P}^n$ to the Stationary Distribution
+
+Stationarity is a fixed-point statement. The stronger statement is that the chain *converges* to $\boldsymbol{\pi}$ from any starting point, and the eigen-decomposition delivers it directly.
+
+By the Chapman--Kolmogorov equations, $[\mathbf{P}^n]_{ij}=\Pr(s_{t+n}=j\mid s_t=i)$, so row $i$ of $\mathbf{P}^n$ is the distribution of the state $n$ periods ahead given $s_t=i$. Since $\lambda_1\neq\lambda_2$, $\mathbf{P}$ is diagonalizable, $\mathbf{P}=\mathbf{R}\boldsymbol{\Lambda}\mathbf{R}^{-1}$, where the columns of $\mathbf{R}=(\mathbf{r}_1,\mathbf{r}_2)$ are right eigenvectors and the rows of $\mathbf{R}^{-1}$ are left eigenvectors $\mathbf{l}_1^{\top},\mathbf{l}_2^{\top}$, normalized so that $\mathbf{l}_i^{\top}\mathbf{r}_j=\delta_{ij}$. Hence
+$$
+\mathbf{P}^n=\mathbf{R}\boldsymbol{\Lambda}^n\mathbf{R}^{-1}
+=\lambda_1^n\,\mathbf{r}_1\mathbf{l}_1^{\top}+\lambda_2^n\,\mathbf{r}_2\mathbf{l}_2^{\top}.
+$$
+The first pair is already known: $\mathbf{r}_1=\mathbf{1}$ and $\mathbf{l}_1=\boldsymbol{\pi}$, with $\boldsymbol{\pi}^{\top}\mathbf{1}=1$ as the normalization requires. Setting $n=0$ identifies the second term without computing $\mathbf{r}_2$ or $\mathbf{l}_2$: $\mathbf{I}=\mathbf{1}\boldsymbol{\pi}^{\top}+\mathbf{r}_2\mathbf{l}_2^{\top}$. Therefore
+$$
+\mathbf{P}^n=\mathbf{1}\boldsymbol{\pi}^{\top}+\lambda_2^n\left(\mathbf{I}-\mathbf{1}\boldsymbol{\pi}^{\top}\right),\qquad n\ge0 .
+$$
+Because $|\lambda_2|<1$, the second term vanishes geometrically and
+$$
+\lim_{n\to\infty}\mathbf{P}^n=\mathbf{1}\boldsymbol{\pi}^{\top}
+=\begin{pmatrix}\pi_1&\pi_2\\ \pi_1&\pi_2\end{pmatrix}.
+$$
+Both rows converge to $\boldsymbol{\pi}^{\top}$: the chain forgets where it started. For an arbitrary initial distribution $\boldsymbol{\mu}_0$, $\boldsymbol{\mu}_0^{\top}\mathbf{P}^n\to\boldsymbol{\mu}_0^{\top}\mathbf{1}\boldsymbol{\pi}^{\top}=\boldsymbol{\pi}^{\top}$. The stationary distribution is thus not merely a fixed point of $\mathbf{P}^{\top}$ but the unique long-run distribution (the chain is ergodic), and $|\lambda_2|=|p_{11}+p_{22}-1|$ governs how fast it is reached: more persistent states mean slower convergence. For our matrix the deviation from $\boldsymbol{\pi}$ shrinks by the factor $\lambda_2=`r round(p11 + p22 - 1, 2)`$ each period, a half-life of `r round(log(0.5) / log(p11 + p22 - 1), 1)` periods.
+
+```{r}
+mpow <- function(M, n) Reduce(`%*%`, replicate(n, M, simplify = FALSE))
+P_inf <- outer(c(1, 1), pi_vec)            # the limit matrix 1 pi'
+n_grid <- c(1, 5, 10, 25, 50, 100)
+out <- t(sapply(n_grid, function(n) {
+  P_n <- mpow(P, n)
+  P_cf <- P_inf + lambs[2]^n * (diag(2) - P_inf)
+  c(n = n, from_1 = P_n[1, 1], from_2 = P_n[2, 1],
+    lambda2_n = lambs[2]^n, closed_form_err = max(abs(P_n - P_cf)))
+}))
+round(out, 6)
+```
+
+The columns `from_1` and `from_2` report $\Pr(s_{t+n}=1\mid s_t=1)$ and $\Pr(s_{t+n}=1\mid s_t=2)$. Both converge to $\pi_1=`r round(pi_1, 4)`$ from opposite sides, the gap shrinking in step with $\lambda_2^n$, and the closed form matches brute-force multiplication to machine precision.
+
+# References
+
+Hamilton, J. D. (1994). *Time Series Analysis*. Princeton University Press. Chapter 22.
